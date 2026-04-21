@@ -14,9 +14,11 @@ public class WeaponSwitcher : MonoBehaviour
     private Cinemachine3rdPersonFollow _thirdPersonFollow;
 
     [Header("Settings")]
-    [Tooltip("Negative moves player right. Try -1.0 or -1.5 for a strong offset.")]
-    public float pistolCameraOffset = -1.0f;
+    public float pistolCameraOffset = -1.2f;
+    public float transitionSpeed = 5f; // Higher = faster camera movement
     public GameObject pistolModel;
+
+    private float _targetOffset = 0f;
 
     void Start()
     {
@@ -26,24 +28,32 @@ public class WeaponSwitcher : MonoBehaviour
 
     void Update()
     {
+        // 1. Handle Input
         if (Keyboard.current.digit1Key.wasPressedThisFrame) EquipUnarmed();
         if (Keyboard.current.digit2Key.wasPressedThisFrame) EquipPistol();
+
+        // 2. Smoothly move the camera offset every frame
+        if (_thirdPersonFollow != null)
+        {
+            _thirdPersonFollow.ShoulderOffset.x = Mathf.Lerp(
+                _thirdPersonFollow.ShoulderOffset.x,
+                _targetOffset,
+                Time.deltaTime * transitionSpeed
+            );
+        }
     }
 
     void EquipUnarmed()
     {
         animator.runtimeAnimatorController = unarmedController;
         if (pistolModel != null) pistolModel.SetActive(false);
-        if (_thirdPersonFollow != null) _thirdPersonFollow.ShoulderOffset.x = 0f;
+        _targetOffset = 0f; // Set the goal to center
     }
 
     void EquipPistol()
     {
         animator.runtimeAnimatorController = pistolOverride;
         if (pistolModel != null) pistolModel.SetActive(true);
-
-        // Push the player significantly to the right of the screen
-        if (_thirdPersonFollow != null)
-            _thirdPersonFollow.ShoulderOffset.x = pistolCameraOffset;
+        _targetOffset = pistolCameraOffset; // Set the goal to the side
     }
 }
