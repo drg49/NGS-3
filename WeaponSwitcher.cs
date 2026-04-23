@@ -14,17 +14,25 @@ public class WeaponSwitcher : MonoBehaviour
     [Header("Camera Configuration")]
     public CinemachineVirtualCamera followCamera;
     private Cinemachine3rdPersonFollow _thirdPersonFollow;
-    private Transform _mainCamTransform;
 
     [Header("Movement & Aim Settings")]
-    [Tooltip("How fast the player rotates to face the crosshair")]
     public float rotationSpeed = 15f;
     public LayerMask aimLayerMask;
     public float transitionSpeed = 5f;
 
-    [Header("Weapon Specific Offsets")]
-    public float pistolCameraOffset = -1.2f;
-    public float rifleCameraOffset = -1.5f;
+    [Header("Unarmed Camera Settings")]
+    public float idleDistance = 3.5f;
+    public float idleVerticalOffset = 0.4f;
+
+    [Header("Pistol Camera Settings")]
+    public float pistolHorizontalOffset = -1.2f;
+    public float pistolDistance = 2.0f;       // Closer
+    public float pistolVerticalOffset = 0.6f; // Higher
+
+    [Header("Rifle Camera Settings")]
+    public float rifleHorizontalOffset = -1.5f;
+    public float rifleDistance = 2.5f;        // Medium
+    public float rifleVerticalOffset = 0.7f;  // Higher
 
     [Header("Weapon Models")]
     public GameObject pistolModel;
@@ -36,18 +44,17 @@ public class WeaponSwitcher : MonoBehaviour
     public Sprite pistolCrosshair;
     public Sprite rifleCrosshair;
 
-    private float _targetOffset = 0f;
+    // Internal Target Values
+    private float _targetHorizontal = 0f;
+    private float _targetDistance = 3.5f;
+    private float _targetVertical = 0.4f;
     private bool _isUnarmed = true;
 
     void Start()
     {
-        // Cache references
         if (followCamera != null)
             _thirdPersonFollow = followCamera.GetCinemachineComponent<Cinemachine3rdPersonFollow>();
 
-        _mainCamTransform = Camera.main.transform;
-
-        // Start in Unarmed state
         EquipUnarmed();
     }
 
@@ -67,37 +74,31 @@ public class WeaponSwitcher : MonoBehaviour
 
     private void HandleCameraLerp()
     {
-        if (_thirdPersonFollow != null)
-        {
-            _thirdPersonFollow.ShoulderOffset.x = Mathf.Lerp(
-                _thirdPersonFollow.ShoulderOffset.x,
-                _targetOffset,
-                Time.deltaTime * transitionSpeed
-            );
-        }
+        if (_thirdPersonFollow == null) return;
+
+        // 1. Move Horizontal (Shoulder side)
+        _thirdPersonFollow.ShoulderOffset.x = Mathf.Lerp(_thirdPersonFollow.ShoulderOffset.x, _targetHorizontal, Time.deltaTime * transitionSpeed);
+
+        // 2. Move Vertical (Height)
+        _thirdPersonFollow.ShoulderOffset.y = Mathf.Lerp(_thirdPersonFollow.ShoulderOffset.y, _targetVertical, Time.deltaTime * transitionSpeed);
+
+        // 3. Move Distance (Zoom)
+        _thirdPersonFollow.CameraDistance = Mathf.Lerp(_thirdPersonFollow.CameraDistance, _targetDistance, Time.deltaTime * transitionSpeed);
     }
 
     private void HandleAimRotation()
     {
-        // Don't force rotation if we aren't holding a weapon
         if (_isUnarmed) return;
 
-        // 1. Raycast from the center of the screen into the world
         Vector3 screenCenter = new Vector3(Screen.width / 2f, Screen.height / 2f, 0);
         Ray ray = Camera.main.ScreenPointToRay(screenCenter);
 
         Vector3 targetPoint;
         if (Physics.Raycast(ray, out RaycastHit hit, 999f, aimLayerMask))
-        {
             targetPoint = hit.point;
-        }
         else
-        {
-            // If we hit nothing (the sky), pick a point far away
             targetPoint = ray.GetPoint(999f);
-        }
 
-        // 2. Calculate direction (ignoring vertical Y so the player doesn't lean over)
         Vector3 aimDirection = (targetPoint - transform.position);
         aimDirection.y = 0;
 
@@ -111,28 +112,37 @@ public class WeaponSwitcher : MonoBehaviour
     public void EquipUnarmed()
     {
         _isUnarmed = true;
+        _targetHorizontal = 0f;
+        _targetDistance = idleDistance;
+        _targetVertical = idleVerticalOffset;
+
         animator.runtimeAnimatorController = unarmedController;
         SetWeaponModels(false, false);
         UpdateCrosshair(idleCrosshair);
-        _targetOffset = 0f;
     }
 
     public void EquipPistol()
     {
         _isUnarmed = false;
+        _targetHorizontal = pistolHorizontalOffset;
+        _targetDistance = pistolDistance;
+        _targetVertical = pistolVerticalOffset;
+
         animator.runtimeAnimatorController = pistolOverride;
         SetWeaponModels(true, false);
         UpdateCrosshair(pistolCrosshair);
-        _targetOffset = pistolCameraOffset;
     }
 
     public void EquipRifle()
     {
         _isUnarmed = false;
+        _targetHorizontal = rifleHorizontalOffset;
+        _targetDistance = rifleDistance;
+        _targetVertical = rifleVerticalOffset;
+
         animator.runtimeAnimatorController = rifleOverride;
         SetWeaponModels(false, true);
         UpdateCrosshair(rifleCrosshair);
-        _targetOffset = rifleCameraOffset;
     }
 
     private void SetWeaponModels(bool pistolActive, bool rifleActive)
@@ -144,15 +154,7 @@ public class WeaponSwitcher : MonoBehaviour
     private void UpdateCrosshair(Sprite newSprite)
     {
         if (crosshairUI == null) return;
-
-        if (newSprite == null)
-        {
-            crosshairUI.enabled = false;
-        }
-        else
-        {
-            crosshairUI.enabled = true;
-            crosshairUI.sprite = newSprite;
-        }
+        crosshairUI.enabled = (newSprite != null);
+        if (newSprite != null) crosshairUI.sprite = newSprite;
     }
 }
